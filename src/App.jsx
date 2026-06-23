@@ -119,7 +119,7 @@ export default function App() {
     (async () => {
       try {
         const r = localStorage.getItem(STORAGE_KEY);
-	setData(r ? JSON.parse(r) : INITIAL);
+	const d = r ? JSON.parse(r) : INITIAL;
         if (!d.settings) d.settings = { contributionTarget:50 };
         setData(d);
         setTargetFee(String(d.settings.contributionTarget||50));
@@ -128,7 +128,7 @@ export default function App() {
     })();
   }, []);
 
-  const persist = async (d) => {
+  const persist = (d) => {
     setData(d);
     setSaveMsg("Saving…");
     try {
