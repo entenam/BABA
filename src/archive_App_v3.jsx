@@ -243,7 +243,7 @@ export default function App() {
   const copySummary = async () => {
     const today = new Date().toLocaleDateString("en-AU", { day:"numeric", month:"short", year:"numeric" });
     const txt = [
-      `🏸 BABA — Season 10 Payment Summary (${today})`, ``,
+      `🏸 Season 10 — Payment Summary (${today})`, ``,
       `Players (${paidCount}/${players.length} contributed):`,
       ...players.map(p => `${hasCF(p.id)?"✅":"⏳"} ${p.name}: AUD $${pTotal(p.id)}`), ``,
       ...(expenses.length ? [`Group Expenses:`, ...expenses.map(e=>`• ${e.type}: AUD $${e.amount}`), ``] : []),
@@ -267,9 +267,8 @@ export default function App() {
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
             <div style={{ width:50, height:50, borderRadius:14, background:"rgba(255,255,255,0.12)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:26 }}>🏸</div>
             <div>
-              <div style={{ fontWeight:700, fontSize:18, letterSpacing:"-0.3px" }}>Bangladesh Badminton</div>
-              <div style={{ fontWeight:700, fontSize:18, letterSpacing:"-0.3px" }}>Association (BABA)</div>
-              <div style={{ fontSize:12, opacity:0.55, marginTop:2 }}>Season 10 · {players.length} players</div>
+              <div style={{ fontWeight:700, fontSize:22, letterSpacing:"-0.3px" }}>Season 10</div>
+              <div style={{ fontSize:12, opacity:0.55, marginTop:2 }}>Badminton Group Tracker · {players.length} players</div>
             </div>
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
