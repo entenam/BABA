@@ -1,28 +1,12 @@
 import { useState, useEffect } from "react";
-import { initializeApp } from "firebase/app";
-import { getFirestore, doc, onSnapshot, setDoc } from "firebase/firestore";
 
-// ── Firebase setup ──────────────────────────────────────────
-const firebaseConfig = {
-  apiKey: "AIzaSyAIh6xyFD3C0Mekgn6dVevJwAQU6kR5ZOA",
-  authDomain: "baba-bf2e7.firebaseapp.com",
-  projectId: "baba-bf2e7",
-  storageBucket: "baba-bf2e7.firebasestorage.app",
-  messagingSenderId: "231142480168",
-  appId: "1:231142480168:web:2e18b0ac248fce6aa3d81d"
-};
-const app    = initializeApp(firebaseConfig);
-const db     = getFirestore(app);
-const docRef = doc(db, "data", "season10");
-
-// ── Helpers ─────────────────────────────────────────────────
+const STORAGE_KEY = "badminton_season10";
 const genId = () => Math.random().toString(36).slice(2, 9);
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const sum = arr => arr.reduce((s, x) => s + Number(x.amount), 0);
 const initials = name => name.trim().split(/\s+/).map(w => w[0]).join("").toUpperCase().slice(0, 2);
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const fmtDate     = d => { if (!d) return ""; const [y,m,day] = d.split("-"); return `${parseInt(day)} ${MONTHS[parseInt(m)-1]}`; };
-const fmtDateFull = d => { if (!d) return ""; const [y,m,day] = d.split("-"); return `${parseInt(day)} ${MONTHS[parseInt(m)-1]} ${y}`; };
+const fmtDate = d => { if (!d) return ""; const [y,m,day] = d.split("-"); return `${parseInt(day)} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(m)-1]}`; };
+const fmtDateFull = d => { if (!d) return ""; const [y,m,day] = d.split("-"); return `${parseInt(day)} ${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][parseInt(m)-1]} ${y}`; };
 
 const PAYMENT_TYPES = ["Contribution Fee", "Shuttlecock", "Court Fee", "Other"];
 
@@ -58,13 +42,11 @@ const INITIAL = {
   ],
 };
 
-// ── Styles ──────────────────────────────────────────────────
 const inp = { width:"100%", boxSizing:"border-box", padding:"10px 12px", border:"1.5px solid #e2e8f0", borderRadius:10, fontSize:14, fontFamily:"system-ui", background:"white", color:"#1e293b", outline:"none" };
 const btn = { padding:"10px 16px", borderRadius:10, border:"1.5px solid #e2e8f0", background:"white", cursor:"pointer", fontSize:14, fontFamily:"system-ui", color:"#334155", fontWeight:500 };
 const btnPrimary = { ...btn, background:"#1e3a6b", color:"white", border:"none" };
 const btnDanger  = { ...btn, color:"#dc2626", border:"1.5px solid #fecaca", background:"#fff5f5" };
 
-// ── Sub-components ───────────────────────────────────────────
 function Badge({ type }) {
   const c = TYPE_CFG[type] || TYPE_CFG["Other"];
   return <span style={{ display:"inline-flex", alignItems:"center", gap:4, background:c.bg, color:c.fg, fontSize:11, fontWeight:600, padding:"3px 10px", borderRadius:20 }}>{c.emoji} {type}</span>;
@@ -106,7 +88,6 @@ function PayForm({ form, setForm, onSave, onCancel, saveLabel }) {
   );
 }
 
-// ── Main App ─────────────────────────────────────────────────
 export default function App() {
   const [data,    setData]    = useState(null);
   const [tab,     setTab]     = useState("players");
@@ -134,64 +115,50 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [targetFee,    setTargetFee]    = useState("50");
 
-  // ── Real-time Firebase listener ──
   useEffect(() => {
-    const unsub = onSnapshot(docRef, (snap) => {
-      if (snap.exists()) {
-        const d = snap.data();
-        if (!d.settings) d.settings = { contributionTarget: 50 };
+    (async () => {
+      try {
+        const r = localStorage.getItem(STORAGE_KEY);
+	const d = r ? JSON.parse(r) : INITIAL;
+        if (!d.settings) d.settings = { contributionTarget:50 };
         setData(d);
-        setTargetFee(String(d.settings.contributionTarget || 50));
-      } else {
-        // First run — seed the database with initial data
-        setDoc(docRef, INITIAL);
-        setData(INITIAL);
-      }
+        setTargetFee(String(d.settings.contributionTarget||50));
+      } catch { setData(INITIAL); }
       setLoading(false);
-    }, (err) => {
-      console.error("Firebase error:", err);
-      setData(INITIAL);
-      setLoading(false);
-    });
-    return () => unsub(); // cleanup on unmount
+    })();
   }, []);
 
-  // ── Persist to Firestore (syncs to all devices instantly) ──
-  const persist = async (d) => {
-    setData(d); // optimistic local update
+  const persist = (d) => {
+    setData(d);
     setSaveMsg("Saving…");
     try {
-      await setDoc(docRef, d);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(d));
       setSaveMsg("Saved ✓");
-      setTimeout(() => setSaveMsg(""), 1500);
-    } catch (e) {
-      console.error(e);
-      setSaveMsg("Save failed ✗");
-    }
+      setTimeout(()=>setSaveMsg(""),1500);
+    } catch { setSaveMsg("Failed"); }
   };
 
   if (loading) return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"70vh", gap:12, color:"#64748b", fontFamily:"system-ui" }}>
       <div style={{ fontSize:40 }}>🏸</div>
-      <div style={{ fontSize:14 }}>Connecting to database…</div>
+      <div style={{ fontSize:14 }}>Loading Season 10…</div>
     </div>
   );
 
   const { players, payments, expenses, settings } = data;
-  const target    = Number(settings?.contributionTarget) || 0;
-  const pPays     = pid => payments.filter(p => p.playerId === pid);
+  const target    = Number(settings?.contributionTarget)||0;
+  const pPays     = pid => payments.filter(p=>p.playerId===pid);
   const pTotal    = pid => sum(pPays(pid));
-  const hasCF     = pid => pPays(pid).some(p => p.type === "Contribution Fee" && (target === 0 || p.amount >= target));
-  const paidCount = players.filter(p => hasCF(p.id)).length;
+  const hasCF     = pid => pPays(pid).some(p=>p.type==="Contribution Fee"&&(target===0||p.amount>=target));
+  const paidCount = players.filter(p=>hasCF(p.id)).length;
   const totalIn   = sum(payments);
   const totalOut  = sum(expenses);
   const balance   = totalIn - totalOut;
 
-  // ── Actions ──
   const addPlayer = () => {
     if (!pForm.name.trim()) return;
-    persist({ ...data, players:[...players, { id:genId(), name:pForm.name.trim(), phone:pForm.phone.trim() }] });
-    setAddingPlayer(false); setPForm({ name:"", phone:"" });
+    persist({ ...data, players:[...players,{id:genId(),name:pForm.name.trim(),phone:pForm.phone.trim()}] });
+    setAddingPlayer(false); setPForm({name:"",phone:""});
   };
   const removePlayer = id => {
     persist({ ...data, players:players.filter(p=>p.id!==id), payments:payments.filter(p=>p.playerId!==id) });
@@ -202,8 +169,8 @@ export default function App() {
     setPayForm({ type:"Contribution Fee", amount:target?String(target):"", date:todayStr(), notes:"" });
   };
   const logPayment = () => {
-    if (!payForm.amount || !logFor) return;
-    persist({ ...data, payments:[...payments, { id:genId(), playerId:logFor, type:payForm.type, amount:parseFloat(payForm.amount), date:payForm.date, notes:payForm.notes }] });
+    if (!payForm.amount||!logFor) return;
+    persist({ ...data, payments:[...payments,{id:genId(),playerId:logFor,type:payForm.type,amount:parseFloat(payForm.amount),date:payForm.date,notes:payForm.notes}] });
     setLogFor(null);
   };
   const startEditPay = pay => {
@@ -213,15 +180,15 @@ export default function App() {
   };
   const saveEditPay = () => {
     if (!editPayFrm.amount) return;
-    persist({ ...data, payments:payments.map(p => p.id===editPayId ? { ...p, type:editPayFrm.type, amount:parseFloat(editPayFrm.amount), date:editPayFrm.date, notes:editPayFrm.notes } : p) });
+    persist({ ...data, payments:payments.map(p=>p.id===editPayId?{...p,type:editPayFrm.type,amount:parseFloat(editPayFrm.amount),date:editPayFrm.date,notes:editPayFrm.notes}:p) });
     setEditPayId(null);
   };
-  const deletePayment = id => { persist({ ...data, payments:payments.filter(p=>p.id!==id) }); setConfirmPayId(null); };
+  const deletePayment = id => { persist({...data,payments:payments.filter(p=>p.id!==id)}); setConfirmPayId(null); };
 
   const addExpense = () => {
     if (!expForm.amount) return;
-    persist({ ...data, expenses:[...expenses, { id:genId(), type:expForm.type, amount:parseFloat(expForm.amount), date:expForm.date, notes:expForm.notes }] });
-    setAddingExp(false); setExpForm({ type:"Court Fee", amount:"", date:todayStr(), notes:"" });
+    persist({ ...data, expenses:[...expenses,{id:genId(),type:expForm.type,amount:parseFloat(expForm.amount),date:expForm.date,notes:expForm.notes}] });
+    setAddingExp(false); setExpForm({type:"Court Fee",amount:"",date:todayStr(),notes:""});
   };
   const startEditExp = exp => {
     setEditExpId(exp.id);
@@ -230,33 +197,33 @@ export default function App() {
   };
   const saveEditExp = () => {
     if (!editExpFrm.amount) return;
-    persist({ ...data, expenses:expenses.map(e => e.id===editExpId ? { ...e, type:editExpFrm.type, amount:parseFloat(editExpFrm.amount), date:editExpFrm.date, notes:editExpFrm.notes } : e) });
+    persist({ ...data, expenses:expenses.map(e=>e.id===editExpId?{...e,type:editExpFrm.type,amount:parseFloat(editExpFrm.amount),date:editExpFrm.date,notes:editExpFrm.notes}:e) });
     setEditExpId(null);
   };
-  const deleteExpense = id => { persist({ ...data, expenses:expenses.filter(e=>e.id!==id) }); setConfirmExpId(null); };
+  const deleteExpense = id => { persist({...data,expenses:expenses.filter(e=>e.id!==id)}); setConfirmExpId(null); };
 
   const saveSettings = () => {
-    persist({ ...data, settings:{ ...settings, contributionTarget:parseFloat(targetFee)||0 } });
+    persist({ ...data, settings:{...settings,contributionTarget:parseFloat(targetFee)||0} });
     setShowSettings(false);
   };
 
   const copySummary = async () => {
-    const today = new Date().toLocaleDateString("en-AU", { day:"numeric", month:"short", year:"numeric" });
+    const today = new Date().toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric"});
     const txt = [
-      `🏸 Season 10 — Payment Summary (${today})`, ``,
+      `🏸 Season 10 — Payment Summary (${today})`,``,
       `Players (${paidCount}/${players.length} contributed):`,
-      ...players.map(p => `${hasCF(p.id)?"✅":"⏳"} ${p.name}: AUD $${pTotal(p.id)}`), ``,
-      ...(expenses.length ? [`Group Expenses:`, ...expenses.map(e=>`• ${e.type}: AUD $${e.amount}`), ``] : []),
+      ...players.map(p=>`${hasCF(p.id)?"✅":"⏳"} ${p.name}: AUD $${pTotal(p.id)}`),``,
+      ...(expenses.length?[`Group Expenses:`,...expenses.map(e=>`• ${e.type}: AUD $${e.amount}`),``]:[]),
       `Collected: AUD $${totalIn}  |  Expenses: AUD $${totalOut}  |  Balance: AUD $${balance}`,
     ].join("\n");
-    try { await navigator.clipboard.writeText(txt); setCopied(true); setTimeout(()=>setCopied(false), 2500); } catch {}
+    try { await navigator.clipboard.writeText(txt); setCopied(true); setTimeout(()=>setCopied(false),2500); } catch {}
   };
 
   const allTxns = [
-    ...payments.map(p => ({ ...p, who:players.find(pl=>pl.id===p.playerId)?.name||"Unknown", dir:"in" })),
-    ...expenses.map(e => ({ ...e, who:"Group", dir:"out" })),
-  ].sort((a,b) => b.date.localeCompare(a.date));
-  const byDate = allTxns.reduce((acc,t) => { (acc[t.date]=acc[t.date]||[]).push(t); return acc; }, {});
+    ...payments.map(p=>({...p,who:players.find(pl=>pl.id===p.playerId)?.name||"Unknown",dir:"in"})),
+    ...expenses.map(e=>({...e,who:"Group",dir:"out"})),
+  ].sort((a,b)=>b.date.localeCompare(a.date));
+  const byDate = allTxns.reduce((acc,t)=>{ (acc[t.date]=acc[t.date]||[]).push(t); return acc; },{});
 
   return (
     <div style={{ fontFamily:"system-ui,-apple-system,sans-serif", minHeight:"100vh", background:"#f1f5f9", color:"#1e293b" }}>
@@ -272,7 +239,7 @@ export default function App() {
             </div>
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            {saveMsg && <span style={{ fontSize:11, opacity:0.6, background:"rgba(255,255,255,0.1)", padding:"4px 10px", borderRadius:20 }}>{saveMsg}</span>}
+            {saveMsg && <span style={{ fontSize:11, opacity:0.55 }}>{saveMsg}</span>}
             <button onClick={()=>setShowSettings(!showSettings)} title="Settings"
               style={{ background:"rgba(255,255,255,0.1)", border:"none", borderRadius:10, width:38, height:38, cursor:"pointer", fontSize:17, display:"flex", alignItems:"center", justifyContent:"center" }}>⚙️</button>
           </div>
@@ -290,6 +257,7 @@ export default function App() {
           </div>
         )}
 
+        {/* Stat pills */}
         <div style={{ display:"flex", gap:8, marginBottom:"1rem", overflowX:"auto", paddingBottom:2 }}>
           {[
             { label:"Collected", val:`AUD $${totalIn}`,  color:"#4ade80" },
@@ -304,6 +272,7 @@ export default function App() {
           ))}
         </div>
 
+        {/* Tabs */}
         <div style={{ display:"flex", borderTop:"1px solid rgba(255,255,255,0.1)" }}>
           {[["players","👥 Players"],["expenses","🧾 Expenses"],["history","📋 History"]].map(([id,label])=>(
             <button key={id} onClick={()=>setTab(id)} style={{
@@ -318,7 +287,7 @@ export default function App() {
       {/* ── CONTENT ── */}
       <div style={{ padding:"1rem", maxWidth:600, margin:"0 auto" }}>
 
-        {/* PLAYERS */}
+        {/* ── PLAYERS ── */}
         {tab==="players" && (
           <>
             {players.map((player, pi) => {
@@ -326,12 +295,14 @@ export default function App() {
               const pays = pPays(player.id);
               const tot  = pTotal(player.id);
               const paid = hasCF(player.id);
-              const isLogging       = logFor === player.id;
-              const isConfirmRemove = confirmPlayerId === player.id;
+              const isLogging        = logFor === player.id;
+              const isConfirmRemove  = confirmPlayerId === player.id;
 
               return (
                 <div key={player.id} style={{ background:"white", borderRadius:18, marginBottom:16, overflow:"hidden", boxShadow:"0 2px 8px rgba(0,0,0,0.08)", borderLeft:`5px solid ${pc.border}` }}>
-                  <div style={{ padding:"1rem", display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+
+                  {/* Player header */}
+                  <div style={{ padding:"1rem 1rem 1rem", display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
                     <div style={{ display:"flex", alignItems:"center", gap:12 }}>
                       <Avatar name={player.name} colorIdx={pi} />
                       <div>
@@ -351,13 +322,20 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Payments */}
                   {pays.length > 0 && (
                     <div style={{ borderTop:"1px solid #f1f5f9" }}>
                       {pays.map((pay,i) => {
                         const isEdit    = editPayId === pay.id;
                         const isConfirm = confirmPayId === pay.id;
                         const bb = i<pays.length-1 ? "1px solid #f1f5f9" : "none";
-                        if (isEdit) return <div key={pay.id} style={{ borderBottom:bb }}><PayForm form={editPayFrm} setForm={setEditPayFrm} onSave={saveEditPay} onCancel={()=>setEditPayId(null)} saveLabel="Save changes" /></div>;
+
+                        if (isEdit) return (
+                          <div key={pay.id} style={{ borderBottom:bb }}>
+                            <PayForm form={editPayFrm} setForm={setEditPayFrm} onSave={saveEditPay} onCancel={()=>setEditPayId(null)} saveLabel="Save changes" />
+                          </div>
+                        );
+
                         if (isConfirm) return (
                           <div key={pay.id} style={{ padding:"12px 1rem", background:"#fff5f5", borderBottom:bb, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap" }}>
                             <span style={{ fontSize:13, color:"#dc2626", fontWeight:500 }}>Delete this payment?</span>
@@ -367,6 +345,7 @@ export default function App() {
                             </div>
                           </div>
                         );
+
                         return (
                           <div key={pay.id} style={{ padding:"10px 1rem", borderBottom:bb, display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
                             <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
@@ -376,8 +355,10 @@ export default function App() {
                             </div>
                             <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
                               <span style={{ fontWeight:700, fontSize:15 }}>AUD ${pay.amount}</span>
-                              <button onClick={()=>startEditPay(pay)} title="Edit" style={{ background:"#f1f5f9", border:"none", borderRadius:8, width:32, height:32, cursor:"pointer", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center" }}>✏️</button>
-                              <button onClick={()=>{setConfirmPayId(pay.id);setEditPayId(null);}} title="Delete" style={{ background:"#fff5f5", border:"none", borderRadius:8, width:32, height:32, cursor:"pointer", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center" }}>🗑️</button>
+                              <button onClick={()=>startEditPay(pay)} title="Edit this payment"
+                                style={{ background:"#f1f5f9", border:"none", borderRadius:8, width:32, height:32, cursor:"pointer", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center" }}>✏️</button>
+                              <button onClick={()=>{setConfirmPayId(pay.id);setEditPayId(null);}} title="Delete this payment"
+                                style={{ background:"#fff5f5", border:"none", borderRadius:8, width:32, height:32, cursor:"pointer", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center" }}>🗑️</button>
                             </div>
                           </div>
                         );
@@ -385,8 +366,12 @@ export default function App() {
                     </div>
                   )}
 
-                  {isLogging && <PayForm form={payForm} setForm={setPayForm} onSave={logPayment} onCancel={()=>setLogFor(null)} saveLabel="Save payment" />}
+                  {/* Log payment form */}
+                  {isLogging && (
+                    <PayForm form={payForm} setForm={setPayForm} onSave={logPayment} onCancel={()=>setLogFor(null)} saveLabel="Save payment" />
+                  )}
 
+                  {/* Delete player confirm */}
                   {isConfirmRemove && !isLogging && (
                     <div style={{ padding:"12px 1rem", background:"#fff5f5", borderTop:"1px solid #fecaca", display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap" }}>
                       <span style={{ fontSize:13, color:"#dc2626", fontWeight:500 }}>Remove {player.name} and all payments?</span>
@@ -397,10 +382,15 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* Action buttons */}
                   {!isLogging && !isConfirmRemove && (
                     <div style={{ padding:"10px 1rem", borderTop:"1px solid #f1f5f9", display:"flex", gap:8 }}>
-                      <button onClick={()=>openLog(player.id)} style={{ ...btn, flex:1, background:pc.btnBg, color:pc.btnFg, border:"none", fontWeight:600 }}>+ Log Payment</button>
-                      <button onClick={()=>{setConfirmPlayerId(player.id);setLogFor(null);}} style={{ ...btnDanger, padding:"10px 14px" }}>Remove</button>
+                      <button onClick={()=>openLog(player.id)}
+                        style={{ ...btn, flex:1, background:pc.btnBg, color:pc.btnFg, border:"none", fontWeight:600, display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+                        + Log Payment
+                      </button>
+                      <button onClick={()=>{setConfirmPlayerId(player.id);setLogFor(null);}}
+                        style={{ ...btnDanger, padding:"10px 14px" }}>Remove</button>
                     </div>
                   )}
                 </div>
@@ -415,7 +405,7 @@ export default function App() {
                 <div style={{ fontSize:11, fontWeight:700, color:"#64748b", marginBottom:5, textTransform:"uppercase", letterSpacing:"0.05em" }}>Phone (optional)</div>
                 <input placeholder="+61 ..." value={pForm.phone} onChange={e=>setPForm({...pForm,phone:e.target.value})} onKeyDown={e=>e.key==="Enter"&&addPlayer()} style={{ ...inp, marginBottom:14 }} />
                 <div style={{ display:"flex", gap:8 }}>
-                  <button onClick={()=>{setAddingPlayer(false);setPForm({name:"",phone:""});}} style={{ ...btn, flex:1 }}>Cancel</button>
+                  <button onClick={()=>{setAddingPlayer(false);setPForm({name:"",phone:""}); }} style={{ ...btn, flex:1 }}>Cancel</button>
                   <button onClick={addPlayer} style={{ ...btnPrimary, flex:2 }}>Add Player ↗</button>
                 </div>
               </div>
@@ -427,7 +417,7 @@ export default function App() {
           </>
         )}
 
-        {/* EXPENSES */}
+        {/* ── EXPENSES ── */}
         {tab==="expenses" && (
           <>
             {expenses.length===0 && !addingExp && (
@@ -436,13 +426,20 @@ export default function App() {
                 <div style={{ fontSize:15 }}>No group expenses yet</div>
               </div>
             )}
+
             {expenses.length > 0 && (
               <div style={{ background:"white", borderRadius:18, marginBottom:14, overflow:"hidden", boxShadow:"0 2px 8px rgba(0,0,0,0.08)" }}>
                 {expenses.map((exp,i) => {
                   const isEdit    = editExpId === exp.id;
                   const isConfirm = confirmExpId === exp.id;
                   const bb = i<expenses.length-1 ? "1px solid #f1f5f9" : "none";
-                  if (isEdit) return <div key={exp.id} style={{ borderBottom:bb }}><PayForm form={editExpFrm} setForm={setEditExpFrm} onSave={saveEditExp} onCancel={()=>setEditExpId(null)} saveLabel="Save changes" /></div>;
+
+                  if (isEdit) return (
+                    <div key={exp.id} style={{ borderBottom:bb }}>
+                      <PayForm form={editExpFrm} setForm={setEditExpFrm} onSave={saveEditExp} onCancel={()=>setEditExpId(null)} saveLabel="Save changes" />
+                    </div>
+                  );
+
                   if (isConfirm) return (
                     <div key={exp.id} style={{ padding:"12px 1rem", background:"#fff5f5", borderBottom:bb, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap" }}>
                       <span style={{ fontSize:13, color:"#dc2626", fontWeight:500 }}>Delete this expense?</span>
@@ -452,6 +449,7 @@ export default function App() {
                       </div>
                     </div>
                   );
+
                   return (
                     <div key={exp.id} style={{ padding:"14px 1rem", borderBottom:bb, display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
                       <div>
@@ -463,24 +461,30 @@ export default function App() {
                       </div>
                       <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
                         <span style={{ fontWeight:700, fontSize:16 }}>AUD ${exp.amount}</span>
-                        <button onClick={()=>startEditExp(exp)} title="Edit" style={{ background:"#f1f5f9", border:"none", borderRadius:8, width:32, height:32, cursor:"pointer", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center" }}>✏️</button>
-                        <button onClick={()=>{setConfirmExpId(exp.id);setEditExpId(null);}} title="Delete" style={{ background:"#fff5f5", border:"none", borderRadius:8, width:32, height:32, cursor:"pointer", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center" }}>🗑️</button>
+                        <button onClick={()=>startEditExp(exp)} title="Edit"
+                          style={{ background:"#f1f5f9", border:"none", borderRadius:8, width:32, height:32, cursor:"pointer", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center" }}>✏️</button>
+                        <button onClick={()=>{setConfirmExpId(exp.id);setEditExpId(null);}} title="Delete"
+                          style={{ background:"#fff5f5", border:"none", borderRadius:8, width:32, height:32, cursor:"pointer", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center" }}>🗑️</button>
                       </div>
                     </div>
                   );
                 })}
               </div>
             )}
+
             {expenses.length > 0 && (
               <div style={{ background:"white", borderRadius:14, padding:"14px 1rem", marginBottom:14, display:"flex", justifyContent:"space-between", alignItems:"center", boxShadow:"0 1px 4px rgba(0,0,0,0.06)" }}>
                 <span style={{ color:"#64748b", fontWeight:500 }}>Total expenses</span>
                 <span style={{ fontWeight:800, fontSize:20, color:"#d97706" }}>AUD ${totalOut}</span>
               </div>
             )}
+
             {addingExp ? (
               <div style={{ background:"white", borderRadius:18, overflow:"hidden", boxShadow:"0 2px 8px rgba(0,0,0,0.08)" }}>
                 <div style={{ padding:"1rem 1rem 0", fontWeight:700, fontSize:16 }}>🧾 Add group expense</div>
-                <PayForm form={expForm} setForm={setExpForm} onSave={addExpense} onCancel={()=>{setAddingExp(false);setExpForm({type:"Court Fee",amount:"",date:todayStr(),notes:""}); }} saveLabel="Save expense" />
+                <PayForm form={expForm} setForm={setExpForm} onSave={addExpense}
+                  onCancel={()=>{setAddingExp(false);setExpForm({type:"Court Fee",amount:"",date:todayStr(),notes:""}); }}
+                  saveLabel="Save expense" />
               </div>
             ) : (
               <button onClick={()=>setAddingExp(true)} style={{ width:"100%", minHeight:54, border:"2px dashed #cbd5e1", background:"transparent", borderRadius:16, cursor:"pointer", color:"#64748b", fontSize:14, fontWeight:500 }}>
@@ -490,7 +494,7 @@ export default function App() {
           </>
         )}
 
-        {/* HISTORY */}
+        {/* ── HISTORY ── */}
         {tab==="history" && (
           <>
             {allTxns.length===0 ? (
@@ -503,6 +507,7 @@ export default function App() {
                 <button onClick={copySummary} style={{ ...btn, width:"100%", marginBottom:16, minHeight:48, display:"flex", alignItems:"center", justifyContent:"center", gap:8, ...(copied?{background:"#dcfce7",color:"#15803d",border:"1.5px solid #86efac"}:{}) }}>
                   {copied ? "✅ Copied! Paste into WhatsApp" : "📋 Copy summary for WhatsApp"}
                 </button>
+
                 {Object.entries(byDate).map(([date,txns])=>(
                   <div key={date} style={{ marginBottom:16 }}>
                     <div style={{ fontSize:11, fontWeight:700, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>{fmtDateFull(date)}</div>
@@ -524,6 +529,7 @@ export default function App() {
                     </div>
                   </div>
                 ))}
+
                 <div style={{ background:"linear-gradient(135deg,#0f1e33 0%,#1a3a6b 100%)", borderRadius:18, padding:"1.25rem 1.5rem", color:"white" }}>
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
                     <span style={{ opacity:0.65, fontSize:13 }}>Total collected</span>
@@ -542,6 +548,7 @@ export default function App() {
             )}
           </>
         )}
+
         <div style={{ height:32 }} />
       </div>
     </div>
